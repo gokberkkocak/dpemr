@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use structopt::StructOpt;
 
-/// Dominance Incomparability Generator
+/// Distributed parallel in Rust for experiment management.
 #[derive(StructOpt, Debug)]
 #[structopt(name = "dpr")]
 struct Opt {
