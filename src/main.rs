@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use structopt::StructOpt;
 
-/// Distributed parallel in Rust for experiment management.
+/// Distributed parallel for experiment management in Rust 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "dpr")]
 struct Opt {
