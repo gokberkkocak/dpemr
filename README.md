@@ -9,10 +9,10 @@
 
 ```
 dpr 0.1.0
-Distributed parallel in Rust for experiment management
+Distributed parallel for experiment management in Rust
 
 USAGE:
-    dpr [FLAGS] [OPTIONS] --load <commands-file-to-load> --config <config> --extra-args <extra-args> --timeout <timeout>
+    dpr [FLAGS] [OPTIONS] --config <config>
 
 FLAGS:
     -q, --auto-requeue     When used with --timeout, it can requeue task which went timeout for t*2 seconds
