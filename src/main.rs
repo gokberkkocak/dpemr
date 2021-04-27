@@ -77,7 +77,7 @@ enum OnceCellError {
 pub async fn main() -> Result<(), anyhow::Error> {
     let opt = Opt::from_args();
     let db_config = db::DatabaseConfig::from_config_file(&opt.config).await?;
-    let experiment_db = db::ExperimentDatabase::from_db_config(db_config);
+    let experiment_db = db::ExperimentDatabase::from_db_config(db_config, opt.table_name);
 
     if opt.debug {
         DEBUG_MODE
@@ -89,7 +89,10 @@ pub async fn main() -> Result<(), anyhow::Error> {
             .map_err(|_| anyhow::Error::new(OnceCellError::CouldNotSetDebugCell))?;
     }
     if opt.table {
-        experiment_db.create_table(&opt.table_name).await?;
+        experiment_db.create_table().await?;
+    }
+    if let Some(commands_file) =  opt.commands_file_to_load {
+        experiment_db.load_commands(&commands_file).await?;
     }
     experiment_db.pool.disconnect().await?;
     Ok(())

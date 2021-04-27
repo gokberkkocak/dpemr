@@ -52,22 +52,27 @@ enum ConfigFileError {
     InvalidConfigFile,
 }
 
+struct TableEntry<'a> {
+    command: &'a str,
+    status: ExperimentStatus,
+}
+
 pub(crate) struct ExperimentDatabase {
     pub(crate) pool: Pool,
+    table_name: String,
 }
 
 impl ExperimentDatabase {
-    pub fn from_db_config(db_config: DatabaseConfig) -> Self {
+    pub fn from_db_config(db_config: DatabaseConfig, table_name: String) -> Self {
         let url = format!(
             "mysql://{}:{}@{}/{}_experiments",
             db_config.username, db_config.password, db_config.host, db_config.username
         );
         let pool = Pool::new(url);
-        Self { pool }
+        Self { pool, table_name }
     }
-    pub async fn create_table(&self, table_name: &str) -> Result<(), anyhow::Error> {
+    pub async fn create_table(&self) -> Result<(), anyhow::Error> {
         let mut conn = self.pool.get_conn().await?;
-
         // Let's create a table for payments.
         conn.exec_drop(
             r"CREATE TABLE ? (
@@ -75,9 +80,57 @@ impl ExperimentDatabase {
                     command VARCHAR(500) NOT NULL, 
                     status int NOT NULL, 
                     PRIMARY KEY (id))",
-            (table_name,),
+            (&self.table_name,),
         )
         .await?;
         Ok(())
+    }
+
+    pub async fn load_commands(&self, commands_file: &Path) -> Result<(), anyhow::Error> {
+        let mut conn = self.pool.get_conn().await?;
+        let file_contents = String::from_utf8(tokio::fs::read(commands_file).await?)?;
+        let mut table_entries = vec![];
+        for line in file_contents.lines() {
+            let t = TableEntry {
+                command: line.trim_end(),
+                status: ExperimentStatus::NotRunning,
+            };
+            table_entries.push(t);
+        }
+        let params = table_entries.into_iter().map(|t| {
+            params! {
+                "command" => t.command,
+                "status" => t.status.to_db_code(),
+            }
+        });
+
+        conn.exec_batch(
+            r"INSERT INTO {} 
+                            (command,status) values (:command, :status)",
+            params,
+        )
+        .await?;
+        Ok(())
+    }
+}
+
+#[derive(Copy, Clone)]
+enum ExperimentStatus {
+    NotRunning,
+    Running,
+    SuccessFinished,
+    FailedFinished,
+    TimedOut,
+}
+
+impl ExperimentStatus {
+    fn to_db_code(self) -> i32 {
+        match self {
+            ExperimentStatus::NotRunning => 0,
+            ExperimentStatus::Running => 1,
+            ExperimentStatus::SuccessFinished => 2,
+            ExperimentStatus::FailedFinished => 3,
+            ExperimentStatus::TimedOut => 4,
+        }
     }
 }
