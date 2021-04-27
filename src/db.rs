@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use rand::{seq::SliceRandom, thread_rng};
+
 use mysql_async::{prelude::*, Pool};
 
 use thiserror::Error;
@@ -73,7 +75,8 @@ impl ExperimentDatabase {
     }
     pub async fn create_table(&self) -> Result<(), anyhow::Error> {
         let mut conn = self.pool.get_conn().await?;
-        // Let's create a table for payments.
+        conn.exec_drop(r"DROP TABLE IF EXISTS ?", (&self.table_name,))
+            .await?;
         conn.exec_drop(
             r"CREATE TABLE ? (
                     id int NOT NULL AUTO_INCREMENT, 
@@ -86,7 +89,11 @@ impl ExperimentDatabase {
         Ok(())
     }
 
-    pub async fn load_commands(&self, commands_file: &Path) -> Result<(), anyhow::Error> {
+    pub async fn load_commands(
+        &self,
+        commands_file: &Path,
+        shuffle: bool,
+    ) -> Result<(), anyhow::Error> {
         let mut conn = self.pool.get_conn().await?;
         let file_contents = String::from_utf8(tokio::fs::read(commands_file).await?)?;
         let mut table_entries = vec![];
@@ -96,6 +103,10 @@ impl ExperimentDatabase {
                 status: ExperimentStatus::NotRunning,
             };
             table_entries.push(t);
+        }
+        if shuffle {
+            let mut rng = thread_rng();
+            table_entries.shuffle(&mut rng);
         }
         let params = table_entries.into_iter().map(|t| {
             params! {

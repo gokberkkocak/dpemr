@@ -12,30 +12,21 @@ dpr 0.1.0
 Distributed parallel for experiment management in Rust
 
 USAGE:
-    dpr [FLAGS] [OPTIONS] --config <config>
+    dpr [FLAGS] [OPTIONS] --config <config> <SUBCOMMAND>
 
 FLAGS:
-    -q, --auto-requeue     When used with --timeout, it can requeue task which went timeout for t*2 seconds
-    -d, --debug            Debug mode enables verbose printing
-    -h, --help             Prints help information
-    -k, --keep-running     Keep it running even though the DB is empty and no tasks are running
-        --reset-all        Reset all jobs to available in DB
-        --reset-failed     Reset failed jobs to available in DB
-        --reset-running    Reset running jobs to available in DB
-        --reset-timeout    Reset timed out jobs to available in DB
-    -r, --run              Run experiments from DB
-    -s, --shuffle          Shuffle data when loading and/or running
-        --stats            Print Experiment statistics
-    -b, --table            Create or empty the table in DB
-    -V, --version          Prints version information
+    -d, --debug      Debug mode enables verbose printing
+    -h, --help       Prints help information
+    -s, --shuffle    Shuffle data when loading and/or running
+    -V, --version    Prints version information
 
 OPTIONS:
-    -l, --load <commands-file-to-load>    Commands file to load
-    -c, --config <config>                 DB Configuration file
-        --extra-args <extra-args>         Additional parallel arguments to pass. Use quotes
-    -f, --freq <freq>                     Time (in seconds) frequency to check db for new jobs (default: 15) [default:
-                                          15]
-    -j, --jobs <nb-jobs>                  Number of parallel of jobs to run (user) (default: 1) [default: 1]
-    -u, --use-table <table-name>          Table to use for experiment (default: experiments) [default: experiments]
-    -t, --timeout <timeout>               Enforce timeout by timeout command in secs. Can be used in --load and --run
+    -c, --config <config>            DB Configuration file
+    -t, --table-name <table-name>    Table to use [default: experiments]
+
+SUBCOMMANDS:
+    edit    Edit the experiment table, insert new data and do maintenance
+    help    Prints this message or the help of the given subcommand(s)
+    run     Run experiments in parallel
+    show    Print out stats or experiment details
 ```
