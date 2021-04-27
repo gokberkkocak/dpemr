@@ -75,10 +75,8 @@ impl ExperimentDatabase {
     }
     pub async fn create_table(&self) -> Result<(), anyhow::Error> {
         let mut conn = self.pool.get_conn().await?;
-        conn.exec_drop(r"DROP TABLE IF EXISTS ?", (&self.table_name,))
-            .await?;
         conn.exec_drop(
-            r"CREATE TABLE ? (
+            r"CREATE OR REPLACE TABLE ? (
                     id int NOT NULL AUTO_INCREMENT, 
                     command VARCHAR(500) NOT NULL, 
                     status int NOT NULL, 
