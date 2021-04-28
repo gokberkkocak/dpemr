@@ -19,6 +19,7 @@ impl ExperimentDatabase {
                     id int NOT NULL AUTO_INCREMENT, 
                     command VARCHAR(500) NOT NULL, 
                     status int NOT NULL, 
+                    CHECK(command<5),
                     PRIMARY KEY (id))",
             self.table_name
         ))

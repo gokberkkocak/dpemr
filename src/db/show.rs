@@ -15,9 +15,10 @@ impl ExperimentDatabase {
         let name_vec = vec!["Available", "Running", "Success", "Failed", "Timeout"];
         let mut result_vec = vec![0; 5];
         for i in results {
+            // SAFETY: Database constraints ensures that status is always below 5.
             result_vec[i.to_db_code()] += 1;
         }
-        for i in 0..5 {
+        for i in 0..name_vec.len() {
             println!("{}: {}", name_vec[i], result_vec[i])
         }
         Ok(())
@@ -27,13 +28,18 @@ impl ExperimentDatabase {
         let mut conn = self.pool.get_conn().await?;
         let results: Vec<(String, ExperimentStatus)> = conn
             .query_map(
-                format!("SELECT (command, status) from {}", self.table_name),
+                format!("SELECT command, status from {}", self.table_name),
                 |(c, s)| (c, ExperimentStatus::new(s)),
             )
             .await?;
-        println!("Command, Status");
-        for (c, e) in results {
-            println!("{},{}", c, e);
+        if results.len() > 0 {
+            println!("Command, Status");
+            for (c, e) in results {
+                println!("{},{}", c, e);
+            }
+        }
+        else {
+            println!("Database is empty.")
         }
         Ok(())
     }
