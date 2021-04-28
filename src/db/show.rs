@@ -1,8 +1,6 @@
 use mysql_async::prelude::*;
 
-use super::ExperimentStatus;
-
-use super::ExperimentDatabase;
+use super::{ExperimentDatabase, ExperimentStatus};
 
 impl ExperimentDatabase {
     pub async fn print_stats(&self) -> Result<(), anyhow::Error> {
@@ -32,14 +30,13 @@ impl ExperimentDatabase {
                 |(c, s)| (c, ExperimentStatus::new(s)),
             )
             .await?;
-        if results.len() > 0 {
+        if results.is_empty() {
+            println!("Database is empty.")
+        } else {
             println!("Command, Status");
             for (cmd, status) in results {
                 println!("{}, {}", cmd, status);
             }
-        }
-        else {
-            println!("Database is empty.")
         }
         Ok(())
     }

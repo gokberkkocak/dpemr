@@ -107,11 +107,11 @@ impl ExperimentStatus {
 impl std::fmt::Display for ExperimentStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExperimentStatus::NotRunning => write!(f, "{}", "Available"),
-            ExperimentStatus::Running => write!(f, "{}", "Running"),
-            ExperimentStatus::SuccessFinished => write!(f, "{}", "Success"),
-            ExperimentStatus::FailedFinished => write!(f, "{}", "Failure"),
-            ExperimentStatus::TimedOut => write!(f, "{}", "Timeout"),
+            ExperimentStatus::NotRunning => write!(f, "Available"),
+            ExperimentStatus::Running => write!(f, "Running"),
+            ExperimentStatus::SuccessFinished => write!(f, "Success"),
+            ExperimentStatus::FailedFinished => write!(f, "Failure"),
+            ExperimentStatus::TimedOut => write!(f, "Timeout"),
         }
     }
 }
