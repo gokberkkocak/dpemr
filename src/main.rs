@@ -32,22 +32,22 @@ enum Command {
     /// Edit the experiment table, insert new data and do maintenance
     Edit {
         /// Create or empty the table in DB
-        #[structopt(short,long)]
+        #[structopt(short, long, group = "reset")]
         table: bool,
         /// Commands file to load
         #[structopt(short = "l", long = "load")]
         commands_file_to_load: Option<PathBuf>,
         /// Reset running jobs to available in DB
-        #[structopt(long)]
+        #[structopt(long, group = "reset")]
         reset_running: bool,
         /// Reset failed jobs to available in DB
-        #[structopt(long)]
+        #[structopt(long, group = "reset")]
         reset_failed: bool,
         /// Reset timed out jobs to available in DB
-        #[structopt(long)]
+        #[structopt(long, group = "reset")]
         reset_timeout: bool,
         /// Reset all jobs to available in DB
-        #[structopt(long)]
+        #[structopt(long, group = "reset")]
         reset_all: bool,
     },
     /// Run experiments in parallel
@@ -74,10 +74,10 @@ enum Command {
     /// Print out stats or experiment details
     Show {
         /// Print Experiment statistics
-        #[structopt(long)]
+        #[structopt(long, group = "print")]
         stats: bool,
         /// Print all experiments in the DB
-        #[structopt(long)]
+        #[structopt(long, group = "print")]
         all: bool,
     },
 }
@@ -129,7 +129,13 @@ pub async fn main() -> Result<(), anyhow::Error> {
             keep_running,
             extra_args,
         } => {}
-        Command::Show { stats, all } => {}
+        Command::Show { stats, all } => {
+            if stats {
+                experiment_db.print_stats().await?;
+            } else if all {
+                experiment_db.print_all_jobs().await?;
+            }
+        }
     }
     experiment_db.pool.disconnect().await?;
     Ok(())
