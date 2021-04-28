@@ -34,8 +34,8 @@ impl ExperimentDatabase {
             .await?;
         if results.len() > 0 {
             println!("Command, Status");
-            for (c, e) in results {
-                println!("{},{}", c, e);
+            for (cmd, status) in results {
+                println!("{}, {}", cmd, status);
             }
         }
         else {

@@ -19,7 +19,7 @@ impl ExperimentDatabase {
                     id int NOT NULL AUTO_INCREMENT, 
                     command VARCHAR(500) NOT NULL, 
                     status int NOT NULL, 
-                    CHECK(command<5),
+                    CHECK(status<5),
                     PRIMARY KEY (id))",
             self.table_name
         ))
@@ -55,6 +55,54 @@ impl ExperimentDatabase {
             format!(
                 r"INSERT INTO {}
                             (command,status) values (:command, :status)",
+                self.table_name
+            ),
+            params,
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn reset_all_jobs(&self) -> Result<(), anyhow::Error> {
+        let mut conn = self.pool.get_conn().await?;
+        let ids: Vec<usize> = conn
+            .query(format!(
+                "SELECT id from {}",
+                self.table_name
+            ))
+            .await?;
+        self.reset_given_ids(ids).await?;
+        Ok(())
+    }
+
+    pub(crate) async fn reset_jobs_with_status(
+        &self,
+        status: ExperimentStatus,
+    ) -> Result<(), anyhow::Error> {
+        let mut conn = self.pool.get_conn().await?;
+        let ids: Vec<usize> = conn
+            .exec(
+                format!("SELECT id from {} WHERE status = :status", self.table_name),
+                params! {
+                    "status" => status.to_db_code(),
+                },
+            )
+            .await?;
+        self.reset_given_ids(ids).await?;
+        Ok(())
+    }
+
+    async fn reset_given_ids(&self, ids: Vec<usize>) -> Result<(), anyhow::Error> {
+        let mut conn = self.pool.get_conn().await?;
+        let params = ids.into_iter().map(|i| {
+            params! {
+                "new_status" => ExperimentStatus::NotRunning.to_db_code(),
+                "id" => i,
+            }
+        });
+        conn.exec_batch(
+            format!(
+                r"UPDATE {} SET status = :new_status WHERE id = :id",
                 self.table_name
             ),
             params,

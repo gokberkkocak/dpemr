@@ -73,7 +73,7 @@ impl ExperimentDatabase {
 }
 
 #[derive(Copy, Clone)]
-enum ExperimentStatus {
+pub enum ExperimentStatus {
     NotRunning,
     Running,
     SuccessFinished,

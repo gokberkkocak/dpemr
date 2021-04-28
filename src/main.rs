@@ -1,3 +1,4 @@
+use db::ExperimentStatus;
 use once_cell::sync::OnceCell;
 use structopt::StructOpt;
 use thiserror::Error;
@@ -84,7 +85,7 @@ enum Command {
 
 #[derive(Error, Debug)]
 enum OnceCellError {
-    #[error("Invalid config file. Please check your config file.")]
+    #[error("Could not setup inner flag with OnceCell")]
     CouldNotSetDebugCell,
 }
 
@@ -114,6 +115,20 @@ pub async fn main() -> Result<(), anyhow::Error> {
         } => {
             if table {
                 experiment_db.create_table().await?;
+            } else if reset_running {
+                experiment_db
+                    .reset_jobs_with_status(ExperimentStatus::Running)
+                    .await?;
+            } else if reset_failed {
+                experiment_db
+                    .reset_jobs_with_status(ExperimentStatus::FailedFinished)
+                    .await?;
+            } else if reset_timeout {
+                experiment_db
+                    .reset_jobs_with_status(ExperimentStatus::TimedOut)
+                    .await?;
+            } else if reset_all {
+                experiment_db.reset_all_jobs().await?;
             }
             if let Some(commands_file) = commands_file_to_load {
                 experiment_db
