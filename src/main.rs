@@ -5,7 +5,7 @@ use thiserror::Error;
 mod db;
 mod process;
 
-use std::{path::PathBuf, sync::atomic::Ordering};
+use std::{path::PathBuf, sync::atomic::Ordering, time::Duration};
 
 pub static DEBUG_MODE: OnceCell<bool> = OnceCell::new();
 
@@ -57,21 +57,12 @@ enum Command {
         /// Time (in seconds) frequency to check db for new jobs
         #[structopt(short, long, default_value = "15")]
         freq: usize,
-        /// Enforce timeout by timeout command in secs. Can be used in --load and --run
-        #[structopt(short, long)]
-        timeout: Option<usize>,
-        /// When used with --timeout, it can requeue task which went timeout for t*2 seconds
-        #[structopt(short = "q", long)]
-        auto_requeue: bool,
         /// Number of parallel of jobs on run mode
         #[structopt(short = "j", long = "jobs", default_value = "1")]
         nb_jobs: usize,
         /// Keep it running even though the DB is empty and no tasks are running
         #[structopt(short, long)]
         keep_running: bool,
-        /// Additional parallel arguments to pass. Use quotes
-        #[structopt(long)]
-        extra_args: Option<String>,
     },
     /// Print out stats or experiment details
     Show {
@@ -139,18 +130,16 @@ pub async fn main() -> Result<(), anyhow::Error> {
         }
         Command::Run {
             freq,
-            timeout,
-            auto_requeue,
             nb_jobs,
             keep_running,
-            extra_args,
         } => {
-            loop {
+            while keep_running {
                 for i in 0..20 {
                     if process::GLOBAL_JOB_COUNT.load(Ordering::SeqCst) < nb_jobs {
                         process::ExperimentProcess::new("python a.py".to_string()).await;
                     }
                 }
+                tokio::time::sleep(Duration::from_secs(freq as u64)).await;
             }
         }
         Command::Show { stats, all } => {
