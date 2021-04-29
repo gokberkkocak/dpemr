@@ -3,8 +3,9 @@ use once_cell::sync::OnceCell;
 use structopt::StructOpt;
 use thiserror::Error;
 mod db;
+mod process;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::atomic::Ordering};
 
 pub static DEBUG_MODE: OnceCell<bool> = OnceCell::new();
 
@@ -55,16 +56,16 @@ enum Command {
     Run {
         /// Time (in seconds) frequency to check db for new jobs
         #[structopt(short, long, default_value = "15")]
-        freq: i32,
+        freq: usize,
         /// Enforce timeout by timeout command in secs. Can be used in --load and --run
         #[structopt(short, long)]
-        timeout: Option<i32>,
+        timeout: Option<usize>,
         /// When used with --timeout, it can requeue task which went timeout for t*2 seconds
         #[structopt(short = "q", long)]
         auto_requeue: bool,
         /// Number of parallel of jobs on run mode
         #[structopt(short = "j", long = "jobs", default_value = "1")]
-        nb_jobs: i32,
+        nb_jobs: usize,
         /// Keep it running even though the DB is empty and no tasks are running
         #[structopt(short, long)]
         keep_running: bool,
@@ -143,7 +144,15 @@ pub async fn main() -> Result<(), anyhow::Error> {
             nb_jobs,
             keep_running,
             extra_args,
-        } => {}
+        } => {
+            loop {
+                for i in 0..20 {
+                    if process::GLOBAL_JOB_COUNT.load(Ordering::SeqCst) < nb_jobs {
+                        process::ExperimentProcess::new("python a.py".to_string()).await;
+                    }
+                }
+            }
+        }
         Command::Show { stats, all } => {
             if stats {
                 experiment_db.print_stats().await?;

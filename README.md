@@ -1,10 +1,6 @@
 # dpemr or dpr ![Tests](https://github.com/gokberkkocak/dpemr/actions/workflows/ci.yml/badge.svg)
 ## Distributed parallel for experiment management in Rust 
 
-## Dependencies
-    gnu-parallel
-
-
 ## Usage
 
 ```
