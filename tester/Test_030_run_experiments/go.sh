@@ -1,3 +1,4 @@
-$1 -dbc $2 -l ../simple.txt -r -f 1
-$1 -dc $2 --stats
-$1 -dc $2 --show-all
+$1 -c $2 edit --create-table --load ../simple.txt
+$1 -c $2 run --freq 1
+$1 -c $2 show --stats
+$1 -c $2 show --all
