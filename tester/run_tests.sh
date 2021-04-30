@@ -5,7 +5,7 @@ set -o errexit
 CURRENTDIR=$(pwd)
 echo Current dir is $CURRENTDIR
 CHECKPROG=$(pwd)/../target/debug/dpr
-CONFFILE=$(pwd)/.conf.json
+CONFFILE=$(pwd)/my.cfg
 
 VERSION=$($CHECKPROG --version)
 

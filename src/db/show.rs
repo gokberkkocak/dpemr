@@ -1,6 +1,6 @@
-use mysql_async::prelude::*;
-
 use super::{ExperimentDatabase, ExperimentStatus};
+
+use mysql_async::prelude::*;
 
 impl ExperimentDatabase {
     pub async fn print_stats(&self) -> Result<(), anyhow::Error> {

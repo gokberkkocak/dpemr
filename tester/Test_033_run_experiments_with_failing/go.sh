@@ -1,3 +1,4 @@
-$1 -bc $2 -l ../simple_2.txt -rj 4 -f 1 -t 2 > /dev/null
-$1 -dc $2 --stats
-$1 -dc $2 --show-all
+$1 -c $2 edit --create-table --load ../simple_2.txt
+$1 -c $2 run --freq 1 >> /dev/null
+$1 -c $2 show --stats
+$1 -c $2 show --all

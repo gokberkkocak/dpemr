@@ -1,11 +1,9 @@
-use std::{path::Path, sync::Arc};
-
-use mysql_async::Pool;
-
-use thiserror::Error;
-
 mod show;
 mod table;
+
+use mysql_async::Pool;
+use std::{path::Path, sync::Arc};
+use thiserror::Error;
 
 pub(crate) struct DatabaseConfig {
     host: String,
