@@ -1,3 +1,5 @@
+use crate::db::{ExperimentDatabase, ExperimentStatus, Job};
+
 use std::{
     process::{ExitStatus, Stdio},
     sync::atomic::{AtomicUsize, Ordering},
@@ -18,8 +20,6 @@ pub(crate) static GLOBAL_JOB_COUNT: AtomicUsize = AtomicUsize::new(0);
 const TIMEOUT_RETURN_CODE: i32 = 124;
 
 use tokio::process::Command;
-
-use crate::db::{ExperimentDatabase, ExperimentStatus, Job};
 
 #[derive(Debug)]
 pub struct ExperimentProcess {
@@ -58,7 +58,7 @@ impl ExperimentProcess {
         };
         if let Some(tx) = writer_tx {
             tx.send(end_result).await?;
-        } 
+        }
         Ok(())
     }
 
@@ -82,6 +82,8 @@ impl ExperimentProcess {
         GLOBAL_JOB_COUNT.fetch_sub(1, Ordering::SeqCst);
         let return_code = ExperimentProcess::process_res(job.id, res, experiment_db).await?;
         let (stdout, stderr) = ExperimentProcess::process_std(child).await?;
+        print!("{}", stdout);
+        print!("{}", stderr);
         Ok(ProcessResult {
             id: job.id,
             code: return_code,

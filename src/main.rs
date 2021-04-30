@@ -1,18 +1,14 @@
-use db::ExperimentStatus;
-use once_cell::sync::OnceCell;
-use process::ExperimentProcess;
-use structopt::StructOpt;
-use thiserror::Error;
-
 mod db;
 mod logger;
 mod process;
 
+use db::ExperimentStatus;
 use logger::Logger;
-use std::{path::PathBuf, sync::atomic::Ordering, time::Duration};
-use tokio::sync::mpsc::channel;
+use process::ExperimentProcess;
 
-pub static DEBUG_MODE: OnceCell<bool> = OnceCell::new();
+use std::{path::PathBuf, sync::atomic::Ordering, time::Duration};
+use structopt::StructOpt;
+use tokio::sync::mpsc;
 
 /// Distributed parallel for experiment management in Rust
 #[derive(StructOpt, Debug)]
@@ -21,11 +17,8 @@ struct Opt {
     /// DB Configuration file.
     #[structopt(short, long)]
     config: PathBuf,
-    /// Debug mode enables verbose printing
-    #[structopt(short, long)]
-    debug: bool,
     /// Table to use
-    #[structopt(short, long, default_value = "experiments")]
+    #[structopt(short = "n", long, default_value = "experiments")]
     table_name: String,
     /// Shuffle data when loading and/or running
     #[structopt(short, long)]
@@ -39,8 +32,8 @@ enum Command {
     /// Edit the experiment table, insert new data and do maintenance
     Edit {
         /// Create or empty the table in DB
-        #[structopt(short, long, group = "reset")]
-        table: bool,
+        #[structopt(short = "t", long, group = "reset")]
+        create_table: bool,
         /// Commands file to load
         #[structopt(short = "l", long = "load")]
         commands_file_to_load: Option<PathBuf>,
@@ -83,37 +76,22 @@ enum Command {
     },
 }
 
-#[derive(Error, Debug)]
-enum OnceCellError {
-    #[error("Could not setup inner flag with OnceCell")]
-    CouldNotSetDebugCell,
-}
-
 #[tokio::main]
 pub async fn main() -> Result<(), anyhow::Error> {
     let opt = Opt::from_args();
     let db_config = db::DatabaseConfig::from_config_file(&opt.config).await?;
     let experiment_db = db::ExperimentDatabase::from_db_config(db_config, opt.table_name);
 
-    if opt.debug {
-        DEBUG_MODE
-            .set(true)
-            .map_err(|_| anyhow::Error::new(OnceCellError::CouldNotSetDebugCell))?;
-    } else {
-        DEBUG_MODE
-            .set(false)
-            .map_err(|_| anyhow::Error::new(OnceCellError::CouldNotSetDebugCell))?;
-    }
     match opt.command {
         Command::Edit {
-            table,
+            create_table,
             commands_file_to_load,
             reset_running,
             reset_failed,
             reset_timeout,
             reset_all,
         } => {
-            if table {
+            if create_table {
                 experiment_db.create_table().await?;
             } else if reset_running {
                 experiment_db
@@ -144,7 +122,7 @@ pub async fn main() -> Result<(), anyhow::Error> {
         } => {
             let writer_tx = if let Some(log_folder) = log_folder {
                 // let (watcher_tx, watcher_rx) = channel(10);
-                let (writer_tx, writer_rx) = channel(10);
+                let (writer_tx, writer_rx) = mpsc::channel(10);
                 let _ = Logger::new(writer_rx, log_folder).await?;
                 Some(writer_tx)
             } else {
@@ -156,17 +134,22 @@ pub async fn main() -> Result<(), anyhow::Error> {
                 .filter(|&nb| nb > 0 || keep_running)
             {
                 let nb_available = nb_jobs - process::GLOBAL_JOB_COUNT.load(Ordering::SeqCst);
-                let jobs = experiment_db
-                    .get_available_jobs(nb_available, opt.shuffle)
-                    .await?;
-                experiment_db
-                    .change_status_given_ids(
-                        jobs.iter().map(|j| j.id).collect(),
-                        ExperimentStatus::Running,
-                    )
-                    .await?;
-                for j in jobs {
-                    ExperimentProcess::new(j, experiment_db.clone(), writer_tx.clone()).await?;
+                if nb_available > 0 {
+                    let mut conn = experiment_db.lock_table().await?;
+                    let jobs = experiment_db
+                        .get_available_jobs_with_lock(nb_available, opt.shuffle, &mut conn)
+                        .await?;
+                    experiment_db
+                        .change_status_given_ids_with_lock(
+                            jobs.iter().map(|j| j.id).collect(),
+                            ExperimentStatus::Running,
+                            &mut conn,
+                        )
+                        .await?;
+                    experiment_db.unlock_table(conn).await?;
+                    for j in jobs {
+                        ExperimentProcess::new(j, experiment_db.clone(), writer_tx.clone()).await?;
+                    }
                 }
                 tokio::time::sleep(Duration::from_secs(freq as u64)).await;
             }

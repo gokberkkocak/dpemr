@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use crate::process::ProcessResult;
 
+use std::sync::Arc;
 use tokio::{fs::File, io::AsyncWriteExt, sync::mpsc::Receiver};
 
-use crate::process::ProcessResult;
 
 pub(crate) struct Logger;
 

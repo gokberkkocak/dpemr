@@ -1,10 +1,8 @@
-use std::{path::Path, sync::Arc};
-
-use rand::{seq::SliceRandom, thread_rng};
-
-use mysql_async::prelude::*;
-
 use super::{ExperimentDatabase, ExperimentStatus, Job};
+
+use mysql_async::{prelude::*, Conn};
+use rand::{seq::SliceRandom, thread_rng};
+use std::{path::Path, sync::Arc};
 
 struct TableEntry<'a> {
     command: &'a str,
@@ -95,6 +93,41 @@ impl ExperimentDatabase {
             .await?)
     }
 
+    pub async fn lock_table(&self) -> Result<Conn, anyhow::Error> {
+        let mut conn = self.pool.get_conn().await?;
+        conn.query_drop(format!("LOCK TABLE {} WRITE", self.table_name))
+            .await?;
+        Ok(conn)
+    }
+
+    pub async fn unlock_table(&self, mut conn: Conn) -> Result<(), anyhow::Error> {
+        conn.query_drop("UNLOCK TABLES").await?;
+        Ok(())
+    }
+
+    pub async fn change_status_given_ids_with_lock(
+        &self,
+        ids: Vec<usize>,
+        new_status: ExperimentStatus,
+        conn: &mut Conn,
+    ) -> Result<(), anyhow::Error> {
+        let params = ids.iter().map(|i| {
+            params! {
+                "new_status" => new_status.to_db_code(),
+                "id" => i,
+            }
+        });
+        conn.exec_batch(
+            format!(
+                r"UPDATE {} SET status = :new_status WHERE id = :id",
+                self.table_name
+            ),
+            params,
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn change_status_given_ids(
         &self,
         ids: Vec<usize>,
@@ -118,12 +151,12 @@ impl ExperimentDatabase {
         Ok(())
     }
 
-    pub async fn get_available_jobs(
+    pub async fn get_available_jobs_with_lock(
         &self,
         nb_jobs: usize,
         shuffle: bool,
+        conn: &mut Conn,
     ) -> Result<Vec<Job>, anyhow::Error> {
-        let mut conn = self.pool.get_conn().await?;
         let cmd = if shuffle {
             format!(
                 "SELECT id, command from {} WHERE status = :status ORDER BY RAND() LIMIT :limit ",
