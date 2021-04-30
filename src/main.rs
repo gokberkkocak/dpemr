@@ -1,7 +1,9 @@
 use db::ExperimentStatus;
 use once_cell::sync::OnceCell;
+use process::ExperimentProcess;
 use structopt::StructOpt;
 use thiserror::Error;
+use tokio::task;
 mod db;
 mod process;
 
@@ -63,6 +65,9 @@ enum Command {
         /// Keep it running even though the DB is empty and no tasks are running
         #[structopt(short, long)]
         keep_running: bool,
+        /// Dump command line outputs of tasks.
+        #[structopt(short, long)]
+        log_folder: Option<String>,
     },
     /// Print out stats or experiment details
     Show {
@@ -132,14 +137,44 @@ pub async fn main() -> Result<(), anyhow::Error> {
             freq,
             nb_jobs,
             keep_running,
+            log_folder,
         } => {
-            while keep_running {
-                for i in 0..20 {
-                    if process::GLOBAL_JOB_COUNT.load(Ordering::SeqCst) < nb_jobs {
-                        process::ExperimentProcess::new("python a.py".to_string()).await;
+            let mut processes = vec![];
+            while let Some(_) = experiment_db
+                .get_number_of_available_jobs()
+                .await?
+                .and_then(|nb| {
+                    if nb > 0 || keep_running {
+                        Some(nb)
+                    } else {
+                        None
                     }
+                })
+            {
+                let nb_available = nb_jobs - process::GLOBAL_JOB_COUNT.load(Ordering::SeqCst);
+                let jobs = experiment_db
+                    .get_available_jobs(nb_available, opt.shuffle)
+                    .await?;
+                experiment_db
+                    .change_status_given_ids(
+                        jobs.iter().map(|j| j.id).collect(),
+                        ExperimentStatus::Running,
+                    )
+                    .await?;
+                for j in jobs {
+                    let e = ExperimentProcess::new(j, experiment_db.clone(), log_folder.clone())
+                        .await?;
+                    processes.push(e);
                 }
                 tokio::time::sleep(Duration::from_secs(freq as u64)).await;
+            }
+            for p in processes {
+                let _ = task::spawn(async {
+                    p.task
+                        .await
+                        .expect("Wrapping up last processes failed in a child process");
+                })
+                .await;
             }
         }
         Command::Show { stats, all } => {

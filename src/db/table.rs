@@ -1,10 +1,10 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use rand::{seq::SliceRandom, thread_rng};
 
 use mysql_async::prelude::*;
 
-use super::{ExperimentDatabase, ExperimentStatus};
+use super::{ExperimentDatabase, ExperimentStatus, Job};
 
 struct TableEntry<'a> {
     command: &'a str,
@@ -95,13 +95,13 @@ impl ExperimentDatabase {
             .await?)
     }
 
-    async fn change_status_given_ids(
+    pub async fn change_status_given_ids(
         &self,
         ids: Vec<usize>,
         new_status: ExperimentStatus,
     ) -> Result<(), anyhow::Error> {
         let mut conn = self.pool.get_conn().await?;
-        let params = ids.into_iter().map(|i| {
+        let params = ids.iter().map(|i| {
             params! {
                 "new_status" => new_status.to_db_code(),
                 "id" => i,
@@ -116,5 +116,56 @@ impl ExperimentDatabase {
         )
         .await?;
         Ok(())
+    }
+
+    pub async fn get_available_jobs(
+        &self,
+        nb_jobs: usize,
+        shuffle: bool,
+    ) -> Result<Vec<Job>, anyhow::Error> {
+        let mut conn = self.pool.get_conn().await?;
+        let cmd = if shuffle {
+            format!(
+                "SELECT id, command from {} WHERE status = :status ORDER BY RAND() LIMIT :limit ",
+                self.table_name
+            )
+        } else {
+            format!(
+                "SELECT id, command from {} WHERE status = :status LIMIT :limit",
+                self.table_name
+            )
+        };
+        let jobs: Vec<Job> = conn
+            .exec_map(
+                cmd,
+                params! {
+                    "status" => ExperimentStatus::NotRunning.to_db_code(),
+                    "limit" => nb_jobs
+                },
+                |(id, command)| Job {
+                    id,
+                    command: Arc::new(command),
+                },
+            )
+            .await?;
+
+        Ok(jobs)
+    }
+
+    pub async fn get_number_of_available_jobs(&self) -> Result<Option<usize>, anyhow::Error> {
+        let mut conn = self.pool.get_conn().await?;
+        let job_count: Option<usize> = conn
+            .exec_first(
+                format!(
+                    "SELECT COUNT(*) FROM {} WHERE status = :status",
+                    self.table_name
+                ),
+                params! {
+                    "status" => ExperimentStatus::NotRunning.to_db_code(),
+                },
+            )
+            .await?;
+
+        Ok(job_count)
     }
 }

@@ -4,96 +4,90 @@ use std::{
 };
 
 use tokio::{
-    io::AsyncBufReadExt,
+    fs::File,
+    io::AsyncReadExt,
+    io::AsyncWriteExt,
     io::BufReader,
     task::{self, JoinHandle},
 };
 
 pub(crate) static GLOBAL_JOB_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+const TIMEOUT_RETURN_CODE: i32 = 124;
+
 use tokio::process::Command;
 
+use crate::db::{ExperimentDatabase, ExperimentStatus, Job};
+
 pub struct ExperimentProcess {
-    task: JoinHandle<()>,
+    pub job: Job,
+    pub task: JoinHandle<()>,
 }
 
 impl ExperimentProcess {
-    pub async fn new(command: String) -> Result<ExperimentProcess, anyhow::Error> {
-        GLOBAL_JOB_COUNT.fetch_add(1, Ordering::SeqCst);
-        let mut s = command.split_ascii_whitespace();
-        let mut child = Command::new(s.next().unwrap())
-            .args(s)
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
+    pub(crate) async fn new(
+        job: Job,
+        experiment_db: ExperimentDatabase,
+        log_folder: Option<String>,
+    ) -> Result<ExperimentProcess, anyhow::Error> {
+        let job_clone = job.clone();
         let task = task::spawn(async move {
+            let mut s = job_clone.command.split_ascii_whitespace();
+            let mut child = Command::new(s.next().unwrap())
+                .args(s)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .expect("Spawning process failed on child");
+            GLOBAL_JOB_COUNT.fetch_add(1, Ordering::SeqCst);
             let res = child.wait().await.unwrap();
-            let mut output = BufReader::new(child.stdout.take().expect("a")).lines();
-            while let Some(line) = output.next_line().await.unwrap() {
-                println!("Line: {}", line);
-            }
             GLOBAL_JOB_COUNT.fetch_sub(1, Ordering::SeqCst);
+            let mut stdout = String::new();
+            BufReader::new(child.stdout.take().expect("a"))
+                .read_to_string(&mut stdout)
+                .await
+                .expect("Reading job output failed on child");
+            let stderr = String::new();
+            BufReader::new(child.stderr.take().expect("a"))
+                .read_to_string(&mut stdout)
+                .await
+                .expect("Reading job output failed on child");
             if res.success() {
-                todo!()
-            } else if res.code().unwrap() == 124 {
-                todo!()
+                experiment_db
+                    .change_status_given_ids(vec![job_clone.id], ExperimentStatus::SuccessFinished)
+                    .await
+                    .expect("Job update failed on child process");
+            } else if res.code().unwrap() == TIMEOUT_RETURN_CODE {
+                experiment_db
+                    .change_status_given_ids(vec![job_clone.id], ExperimentStatus::TimedOut)
+                    .await
+                    .expect("Job update failed on child process");
+            } else {
+                experiment_db
+                    .change_status_given_ids(vec![job_clone.id], ExperimentStatus::FailedFinished)
+                    .await
+                    .expect("Job update failed on child process");
+            }
+            if let Some(log_folder) = log_folder {
+                tokio::fs::create_dir_all(&log_folder)
+                    .await
+                    .expect("Cannot create dirs");
+                let mut stdout_file = File::create(format!("{}/{}.out", log_folder, job_clone.id))
+                    .await
+                    .expect("File creation failed on child");
+                stdout_file
+                    .write_all(stdout.as_bytes())
+                    .await
+                    .expect("Writing to file failed on child");
+                let mut stderr_file = File::create(format!("{}/{}.err", log_folder, job_clone.id))
+                    .await
+                    .expect("File creation failed on child");
+                stderr_file
+                    .write_all(stderr.as_bytes())
+                    .await
+                    .expect("Writing to file failed on child");
             }
         });
-        Ok(ExperimentProcess { task })
+        Ok(ExperimentProcess { job, task })
     }
 }
-
-// pub(crate) struct ParallelProcess {
-//     pub child: Child,
-// }
-
-// impl ParallelProcess {
-//     pub async fn new(nb_jobs: usize) -> Result<Self, anyhow::Error> {
-//         let mut child = Command::new("parallel")
-//             // .arg("--pipe")
-//             .arg("-j")
-//             .arg(nb_jobs.to_string())
-//             .stdin(Stdio::piped())
-//             // .stdout(Stdio::piped())
-//             .spawn()?;
-//         // .and_then(|c| { c}).expect("failed to");
-
-//         let child_stdin = child.stdin.as_mut().expect("failed to open stdin");
-//         child_stdin.write_all("echo a\n".as_bytes()).await?;
-//         child_stdin
-//             .write_all("sleep 4; echo a\n".as_bytes())
-//             .await?;
-//         child_stdin
-//             .write_all("sleep 4; echo a\n".as_bytes())
-//             .await?;
-//         child_stdin
-//             .write_all("sleep 4; echo a\n".as_bytes())
-//             .await?;
-//         child_stdin
-//             .write_all("sleep 4; echo a\n".as_bytes())
-//             .await?;
-//         child_stdin
-//             .write_all("sleep 24; echo a\n".as_bytes())
-//             .await?;
-//         child_stdin
-//             .write_all("sleep 34; echo a\n".as_bytes())
-//             .await?;
-//         child_stdin
-//             .write_all("sleep 44; echo a\n".as_bytes())
-//             .await?;
-//         child_stdin
-//             .write_all("sleep 15; echo a\n".as_bytes())
-//             .await?;
-//         child_stdin
-//             .write_all("sleep 14; echo a\n".as_bytes())
-//             .await?;
-
-//         // let mut child_stdout = child.stdout.take().expect("failed to get stdout");
-//         // let mut buf = vec![];
-//         // let _ = child.stdout.take().unwrap().read_buf(&mut buf);
-//         // println!("{:?}", buf);
-//         // dbg!(child_stdout)
-
-//         Ok(ParallelProcess { child })
-//     }
-// }

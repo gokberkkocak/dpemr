@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use mysql_async::Pool;
 
@@ -55,10 +55,10 @@ enum ConfigFileError {
     #[error("Invalid config file. Please check your config file.")]
     InvalidConfigFile,
 }
-
+#[derive(Clone, Debug)]
 pub(crate) struct ExperimentDatabase {
     pub(crate) pool: Pool,
-    table_name: String,
+    table_name: Arc<String>,
 }
 
 impl ExperimentDatabase {
@@ -68,7 +68,10 @@ impl ExperimentDatabase {
             db_config.username, db_config.password, db_config.host, db_config.username
         );
         let pool = Pool::new(url);
-        Self { pool, table_name }
+        Self {
+            pool,
+            table_name: Arc::new(table_name),
+        }
     }
 }
 
@@ -114,4 +117,10 @@ impl std::fmt::Display for ExperimentStatus {
             ExperimentStatus::TimedOut => write!(f, "Timeout"),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Job {
+    pub id: usize,
+    pub command: Arc<String>,
 }
