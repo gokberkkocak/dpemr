@@ -62,7 +62,7 @@ pub(crate) struct ExperimentDatabase {
 impl ExperimentDatabase {
     pub fn from_db_config(db_config: DatabaseConfig, table_name: String) -> Self {
         let url = format!(
-            "mysql://{}:{}@{}/{}_dpem_experiments",
+            "mysql://{}:{}@{}/{}_dpemr_experiments",
             db_config.username, db_config.password, db_config.host, db_config.username
         );
         let pool = Pool::new(url);
