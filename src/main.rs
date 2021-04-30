@@ -3,11 +3,14 @@ use once_cell::sync::OnceCell;
 use process::ExperimentProcess;
 use structopt::StructOpt;
 use thiserror::Error;
-use tokio::task;
+
 mod db;
+mod logger;
 mod process;
 
+use logger::Logger;
 use std::{path::PathBuf, sync::atomic::Ordering, time::Duration};
+use tokio::sync::mpsc::channel;
 
 pub static DEBUG_MODE: OnceCell<bool> = OnceCell::new();
 
@@ -139,17 +142,18 @@ pub async fn main() -> Result<(), anyhow::Error> {
             keep_running,
             log_folder,
         } => {
-            let mut processes = vec![];
+            let writer_tx = if let Some(log_folder) = log_folder {
+                // let (watcher_tx, watcher_rx) = channel(10);
+                let (writer_tx, writer_rx) = channel(10);
+                let _ = Logger::new(writer_rx, log_folder).await?;
+                Some(writer_tx)
+            } else {
+                None
+            };
             while let Some(_) = experiment_db
                 .get_number_of_available_jobs()
                 .await?
-                .and_then(|nb| {
-                    if nb > 0 || keep_running {
-                        Some(nb)
-                    } else {
-                        None
-                    }
-                })
+                .filter(|&nb| nb > 0 || keep_running)
             {
                 let nb_available = nb_jobs - process::GLOBAL_JOB_COUNT.load(Ordering::SeqCst);
                 let jobs = experiment_db
@@ -162,19 +166,9 @@ pub async fn main() -> Result<(), anyhow::Error> {
                     )
                     .await?;
                 for j in jobs {
-                    let e = ExperimentProcess::new(j, experiment_db.clone(), log_folder.clone())
-                        .await?;
-                    processes.push(e);
+                    ExperimentProcess::new(j, experiment_db.clone(), writer_tx.clone()).await?;
                 }
                 tokio::time::sleep(Duration::from_secs(freq as u64)).await;
-            }
-            for p in processes {
-                let _ = task::spawn(async {
-                    p.task
-                        .await
-                        .expect("Wrapping up last processes failed in a child process");
-                })
-                .await;
             }
         }
         Command::Show { stats, all } => {
