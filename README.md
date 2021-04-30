@@ -1,8 +1,9 @@
 # dpemr or dpr ![Tests](https://github.com/gokberkkocak/dpemr/actions/workflows/ci.yml/badge.svg)
 ## Distributed parallel for experiment management in Rust 
 
-Re-write of the project [dpem](https://github.com/gokberkkocak/dpem) in Rust with async tokio runtime. It doesn't require gnu-parallel as a dependency anymore. As a reason, it lacks some expressibility features from the original project due to removal of extra parallel args and some other features as well since handling timeouts or dynamic timeouts inside the experiment seems easier to manage.
+Re-write of the project [dpem](https://github.com/gokberkkocak/dpem) in Rust with async tokio runtime. It doesn't require gnu-parallel as a dependency anymore. As a reason, it lacks some expressibility features from the original project due to removal of extra parallel args and some other features as well since handling timeouts or dynamic timeouts inside the experiment seems easier to manage. 
 
+Since it's not depending gnu-parallel, it's technically possible to use this even on native Windows but I'm not sure that would be useful for anyone. 
 
 ## Usage
 
