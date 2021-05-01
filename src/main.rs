@@ -3,7 +3,7 @@ mod logger;
 mod process;
 
 use db::ExperimentStatus;
-use logger::Logger;
+use logger::TrackerLogger;
 use process::ExperimentProcess;
 
 use std::{path::PathBuf, sync::atomic::Ordering, time::Duration};
@@ -120,18 +120,13 @@ pub async fn main() -> Result<(), anyhow::Error> {
             keep_running,
             log_folder,
         } => {
-            let writer_tx = if let Some(log_folder) = log_folder {
-                // let (watcher_tx, watcher_rx) = channel(10);
-                let (writer_tx, writer_rx) = mpsc::channel(10);
-                let _ = Logger::new(writer_rx, log_folder).await?;
-                Some(writer_tx)
-            } else {
-                None
-            };
-            while let Some(_) = experiment_db
+            let (writer_tx, writer_rx) = mpsc::channel(100);
+            let tracker = TrackerLogger::new(writer_rx, log_folder).await?;
+            while experiment_db
                 .get_number_of_available_jobs()
                 .await?
                 .filter(|&nb| nb > 0 || keep_running)
+                .is_some()
             {
                 let nb_available = nb_jobs - process::GLOBAL_JOB_COUNT.load(Ordering::SeqCst);
                 if nb_available > 0 {
@@ -148,11 +143,16 @@ pub async fn main() -> Result<(), anyhow::Error> {
                         .await?;
                     experiment_db.unlock_table(conn).await?;
                     for j in jobs {
-                        ExperimentProcess::new(j, experiment_db.clone(), writer_tx.clone()).await?;
+                        let p = ExperimentProcess::new(j, experiment_db.clone(), writer_tx.clone())
+                            .await?;
+                        tracker.add_to_active_jobs(p).await;
                     }
                 }
                 tokio::time::sleep(Duration::from_secs(freq as u64)).await;
             }
+            tracker.wait_all_to_finish().await?;
+            drop(writer_tx);
+            tracker.track_task.await??;
         }
         Command::Show { stats, all } => {
             if stats {

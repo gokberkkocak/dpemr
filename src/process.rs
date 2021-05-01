@@ -31,11 +31,11 @@ impl ExperimentProcess {
     pub(crate) async fn new(
         job: Job,
         experiment_db: ExperimentDatabase,
-        writer_tx: Option<Sender<ProcessResult>>,
+        writer_tx: Sender<ProcessResult>,
     ) -> Result<ExperimentProcess, anyhow::Error> {
         let task = task::spawn(ExperimentProcess::middle_layer(
             job.clone(),
-            experiment_db.clone(),
+            experiment_db,
             writer_tx,
         ));
         Ok(ExperimentProcess { job, task })
@@ -44,21 +44,19 @@ impl ExperimentProcess {
     async fn middle_layer(
         job: Job,
         experiment_db: ExperimentDatabase,
-        writer_tx: Option<Sender<ProcessResult>>,
+        writer_tx: Sender<ProcessResult>,
     ) -> Result<(), anyhow::Error> {
         let worker_result = ExperimentProcess::worker(job.clone(), experiment_db).await;
         let end_result = match worker_result {
             std::result::Result::Ok(res) => res,
             std::result::Result::Err(e) => ProcessResult {
-                id: job.id,
+                job,
                 code: -1,
                 stdout: String::new(),
                 stderr: e.to_string(),
             },
         };
-        if let Some(tx) = writer_tx {
-            tx.send(end_result).await?;
-        }
+        writer_tx.send(end_result).await?;
         Ok(())
     }
 
@@ -71,7 +69,7 @@ impl ExperimentProcess {
         let cmd = s
             .next()
             .ok_or(0)
-            .map_err(|_| anyhow::Error::new(ProcessError::CannotStartProcess))?;
+            .map_err(|_| anyhow::Error::new(ProcessError::StartProcess))?;
         let mut child = Command::new(cmd)
             .args(s)
             .stdout(Stdio::piped())
@@ -85,7 +83,7 @@ impl ExperimentProcess {
         print!("{}", stdout);
         print!("{}", stderr);
         Ok(ProcessResult {
-            id: job.id,
+            job,
             code: return_code,
             stdout,
             stderr,
@@ -99,7 +97,7 @@ impl ExperimentProcess {
                 .stdout
                 .take()
                 .ok_or(0)
-                .map_err(|_| anyhow::Error::new(ProcessError::CannotFetchOutput))?,
+                .map_err(|_| anyhow::Error::new(ProcessError::FetchOutput))?,
         )
         .read_to_string(&mut stdout)
         .await?;
@@ -109,7 +107,7 @@ impl ExperimentProcess {
                 .stderr
                 .take()
                 .ok_or(0)
-                .map_err(|_| anyhow::Error::new(ProcessError::CannotFetchOutput))?,
+                .map_err(|_| anyhow::Error::new(ProcessError::FetchOutput))?,
         )
         .read_to_string(&mut stderr)
         .await?;
@@ -125,7 +123,7 @@ impl ExperimentProcess {
             experiment_db
                 .change_status_given_ids(vec![job_id], ExperimentStatus::SuccessFinished)
                 .await?;
-        } else if let Some(_) = res.code().filter(|&c| c == TIMEOUT_RETURN_CODE) {
+        } else if res.code().filter(|&c| c == TIMEOUT_RETURN_CODE).is_some() {
             experiment_db
                 .change_status_given_ids(vec![job_id], ExperimentStatus::TimedOut)
                 .await?;
@@ -136,22 +134,22 @@ impl ExperimentProcess {
         }
         match res.code() {
             Some(ret) => Ok(ret),
-            _ => Err(anyhow::Error::new(ProcessError::CannotGetReturnCode)),
+            _ => Err(anyhow::Error::new(ProcessError::GetReturnCode)),
         }
     }
 }
 #[derive(Error, Debug)]
 enum ProcessError {
     #[error("Cannot get return code of subprocess")]
-    CannotGetReturnCode,
+    GetReturnCode,
     #[error("Cannot start subprocess because of command is invalid")]
-    CannotStartProcess,
+    StartProcess,
     #[error("Cannot get stdout/stderr of the process")]
-    CannotFetchOutput,
+    FetchOutput,
 }
 #[derive(Debug)]
 pub struct ProcessResult {
-    pub id: usize,
+    pub job: Job,
     code: i32,
     pub stdout: String,
     pub stderr: String,
