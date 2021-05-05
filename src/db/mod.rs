@@ -1,6 +1,7 @@
 mod show;
 mod table;
 
+use anyhow::Result;
 use mysql_async::Pool;
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
@@ -20,7 +21,7 @@ impl<'a> DatabaseConfig {
         }
     }
 
-    pub(crate) async fn from_config_file(file_name: &Path) -> Result<Self, anyhow::Error> {
+    pub(crate) async fn from_config_file(file_name: &Path) -> Result<Self> {
         let file_contents = String::from_utf8(tokio::fs::read(file_name).await?)?;
         let mut host = None;
         let mut username = None;

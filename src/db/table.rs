@@ -1,5 +1,6 @@
 use super::{ExperimentDatabase, ExperimentStatus, Job};
 
+use anyhow::Result;
 use mysql_async::{prelude::*, Conn};
 use rand::{seq::SliceRandom, thread_rng};
 use std::{path::Path, sync::Arc};
@@ -10,7 +11,7 @@ struct TableEntry<'a> {
 }
 
 impl ExperimentDatabase {
-    pub async fn create_table(&self) -> Result<(), anyhow::Error> {
+    pub async fn create_table(&self) -> Result<()> {
         let mut conn = self.pool.get_conn().await?;
         conn.query_drop(format!(
             r"CREATE OR REPLACE TABLE {} (
@@ -24,11 +25,7 @@ impl ExperimentDatabase {
         .await?;
         Ok(())
     }
-    pub async fn load_commands(
-        &self,
-        commands_file: &Path,
-        shuffle: bool,
-    ) -> Result<(), anyhow::Error> {
+    pub async fn load_commands(&self, commands_file: &Path, shuffle: bool) -> Result<()> {
         let mut conn = self.pool.get_conn().await?;
         let file_contents = String::from_utf8(tokio::fs::read(commands_file).await?)?;
         let mut table_entries = vec![];
@@ -61,7 +58,7 @@ impl ExperimentDatabase {
         Ok(())
     }
 
-    pub async fn reset_all_jobs(&self) -> Result<(), anyhow::Error> {
+    pub async fn reset_all_jobs(&self) -> Result<()> {
         let mut conn = self.pool.get_conn().await?;
         let ids: Vec<usize> = conn
             .query(format!("SELECT id from {}", self.table_name))
@@ -70,10 +67,7 @@ impl ExperimentDatabase {
         Ok(())
     }
 
-    pub(crate) async fn reset_jobs_with_status(
-        &self,
-        status: ExperimentStatus,
-    ) -> Result<(), anyhow::Error> {
+    pub(crate) async fn reset_jobs_with_status(&self, status: ExperimentStatus) -> Result<()> {
         let mut conn = self.pool.get_conn().await?;
         let ids: Vec<usize> = conn
             .exec(
@@ -87,20 +81,20 @@ impl ExperimentDatabase {
         Ok(())
     }
 
-    async fn reset_given_ids(&self, ids: Vec<usize>) -> Result<(), anyhow::Error> {
+    async fn reset_given_ids(&self, ids: Vec<usize>) -> Result<()> {
         Ok(self
             .change_status_given_ids(ids, ExperimentStatus::NotRunning)
             .await?)
     }
 
-    pub async fn lock_table(&self) -> Result<Conn, anyhow::Error> {
+    pub async fn lock_table(&self) -> Result<Conn> {
         let mut conn = self.pool.get_conn().await?;
         conn.query_drop(format!("LOCK TABLE {} WRITE", self.table_name))
             .await?;
         Ok(conn)
     }
 
-    pub async fn unlock_table(&self, mut conn: Conn) -> Result<(), anyhow::Error> {
+    pub async fn unlock_table(&self, mut conn: Conn) -> Result<()> {
         conn.query_drop("UNLOCK TABLES").await?;
         Ok(())
     }
@@ -110,7 +104,7 @@ impl ExperimentDatabase {
         ids: Vec<usize>,
         new_status: ExperimentStatus,
         conn: &mut Conn,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<()> {
         let params = ids.iter().map(|i| {
             params! {
                 "new_status" => new_status.to_db_code(),
@@ -132,7 +126,7 @@ impl ExperimentDatabase {
         &self,
         ids: Vec<usize>,
         new_status: ExperimentStatus,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<()> {
         let mut conn = self.pool.get_conn().await?;
         let params = ids.iter().map(|i| {
             params! {
@@ -156,7 +150,7 @@ impl ExperimentDatabase {
         nb_jobs: usize,
         shuffle: bool,
         conn: &mut Conn,
-    ) -> Result<Vec<Job>, anyhow::Error> {
+    ) -> Result<Vec<Job>> {
         let cmd = if shuffle {
             format!(
                 "SELECT id, command from {} WHERE status = :status ORDER BY RAND() LIMIT :limit ",
@@ -185,7 +179,7 @@ impl ExperimentDatabase {
         Ok(jobs)
     }
 
-    pub async fn get_number_of_available_jobs(&self) -> Result<Option<usize>, anyhow::Error> {
+    pub async fn get_number_of_available_jobs(&self) -> Result<Option<usize>> {
         let mut conn = self.pool.get_conn().await?;
         let job_count: Option<usize> = conn
             .exec_first(

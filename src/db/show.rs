@@ -1,9 +1,10 @@
 use super::{ExperimentDatabase, ExperimentStatus};
 
+use anyhow::Result;
 use mysql_async::prelude::*;
 
 impl ExperimentDatabase {
-    pub async fn print_stats(&self) -> Result<(), anyhow::Error> {
+    pub async fn print_stats(&self) -> Result<()> {
         let mut conn = self.pool.get_conn().await?;
         let results: Vec<ExperimentStatus> = conn
             .query_map(format!("SELECT status from {}", self.table_name), |x| {
@@ -22,7 +23,7 @@ impl ExperimentDatabase {
         Ok(())
     }
 
-    pub async fn print_all_jobs(&self) -> Result<(), anyhow::Error> {
+    pub async fn print_all_jobs(&self) -> Result<()> {
         let mut conn = self.pool.get_conn().await?;
         let results: Vec<(String, ExperimentStatus)> = conn
             .query_map(
