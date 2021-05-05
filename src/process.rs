@@ -49,8 +49,8 @@ impl ExperimentProcess {
     ) -> Result<()> {
         let worker_result = ExperimentProcess::worker(job.clone(), experiment_db).await;
         let end_result = match worker_result {
-            std::result::Result::Ok(res) => res,
-            std::result::Result::Err(e) => ProcessResult {
+            Ok(res) => res,
+            Err(e) => ProcessResult {
                 job,
                 code: -1,
                 stdout: String::new(),
