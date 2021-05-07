@@ -66,8 +66,7 @@ impl ExperimentProcess {
         let mut s = job.command.split_ascii_whitespace();
         let cmd = s
             .next()
-            .ok_or(0)
-            .map_err(|_| anyhow::Error::new(ProcessError::StartProcess))?;
+            .ok_or(anyhow::Error::new(ProcessError::StartProcess))?;
         let mut child = Command::new(cmd)
             .args(s)
             .stdout(Stdio::piped())
@@ -94,8 +93,7 @@ impl ExperimentProcess {
             child
                 .stdout
                 .take()
-                .ok_or(0)
-                .map_err(|_| anyhow::Error::new(ProcessError::FetchOutput))?,
+                .ok_or( anyhow::Error::new(ProcessError::FetchOutput))?,
         )
         .read_to_string(&mut stdout)
         .await?;
@@ -104,8 +102,7 @@ impl ExperimentProcess {
             child
                 .stderr
                 .take()
-                .ok_or(0)
-                .map_err(|_| anyhow::Error::new(ProcessError::FetchOutput))?,
+                .ok_or(anyhow::Error::new(ProcessError::FetchOutput))?,
         )
         .read_to_string(&mut stderr)
         .await?;

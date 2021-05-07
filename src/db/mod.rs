@@ -3,57 +3,41 @@ mod table;
 
 use anyhow::Result;
 use mysql_async::Pool;
+use serde::Deserialize;
 use std::{path::Path, sync::Arc};
-use thiserror::Error;
 
+#[derive(Deserialize)]
 pub(crate) struct DatabaseConfig {
+    client: DatabaseClient,
+}
+
+#[derive(Deserialize)]
+struct DatabaseClient {
     host: String,
-    username: String,
+    user: String,
     password: String,
 }
 
-impl<'a> DatabaseConfig {
-    fn new(host: String, username: String, password: String) -> Self {
-        Self {
-            host,
-            username,
-            password,
-        }
-    }
-
-    pub(crate) async fn from_config_file(file_name: &Path) -> Result<Self> {
+impl DatabaseConfig {
+    pub(crate) async fn from_config_file(file_name: &Path) -> Result<DatabaseConfig> {
         let file_contents = String::from_utf8(tokio::fs::read(file_name).await?)?;
-        let mut host = None;
-        let mut username = None;
-        let mut password = None;
-        for line in file_contents.lines() {
-            if line.starts_with('#') {
-                continue;
-            } else if line.contains('=') {
-                let split: Vec<&str> = line.split('=').collect();
-                if split.len() >= 2 {
-                    if split[0] == "host" {
-                        host = Some(split[1].trim_end().to_string());
-                    } else if split[0] == "user" {
-                        username = Some(split[1].trim_end().to_string());
-                    } else if split[0] == "password" {
-                        password = Some(split[1].trim_end().to_string());
-                    }
-                }
-            }
-        }
-        match (host, username, password) {
-            (Some(h), Some(u), Some(p)) => Ok(Self::new(h, u, p)),
-            _ => Err(anyhow::Error::new(ConfigFileError::InvalidConfigFile)),
-        }
+        let dbc: DatabaseConfig = toml::from_str(&file_contents)?;
+        Ok(dbc)
+    }
+
+    pub(crate) fn get_user(&self) -> &str {
+        &self.client.user
+    }
+
+    pub(crate) fn get_password(&self) -> &str {
+        &self.client.password
+    }
+
+    pub(crate) fn get_host(&self) -> &str {
+        &self.client.host
     }
 }
 
-#[derive(Error, Debug)]
-enum ConfigFileError {
-    #[error("Invalid config file. Please check your config file.")]
-    InvalidConfigFile,
-}
 #[derive(Clone, Debug)]
 pub(crate) struct ExperimentDatabase {
     pub(crate) pool: Pool,
@@ -64,7 +48,10 @@ impl ExperimentDatabase {
     pub fn from_db_config(db_config: DatabaseConfig, table_name: String) -> Self {
         let url = format!(
             "mysql://{}:{}@{}/{}_dpemr_experiments",
-            db_config.username, db_config.password, db_config.host, db_config.username
+            db_config.get_user(),
+            db_config.get_password(),
+            db_config.get_host(),
+            db_config.get_user()
         );
         let pool = Pool::new(url);
         Self {
@@ -76,11 +63,11 @@ impl ExperimentDatabase {
 
 #[derive(Copy, Clone)]
 pub enum ExperimentStatus {
-    NotRunning,
-    Running,
-    SuccessFinished,
-    FailedFinished,
-    TimedOut,
+    NotRunning = 0,
+    Running = 1,
+    SuccessFinished = 2,
+    FailedFinished = 3,
+    TimedOut = 4,
 }
 
 impl ExperimentStatus {
@@ -91,18 +78,13 @@ impl ExperimentStatus {
             2 => ExperimentStatus::SuccessFinished,
             3 => ExperimentStatus::FailedFinished,
             4 => ExperimentStatus::TimedOut,
+            // SAFETY: If experiment status only constructed for status codes from db table, it's guaranteed to be bounded. 
             _ => unreachable!(),
         }
     }
 
     fn to_db_code(self) -> usize {
-        match self {
-            ExperimentStatus::NotRunning => 0,
-            ExperimentStatus::Running => 1,
-            ExperimentStatus::SuccessFinished => 2,
-            ExperimentStatus::FailedFinished => 3,
-            ExperimentStatus::TimedOut => 4,
-        }
+        self as usize
     }
 }
 
