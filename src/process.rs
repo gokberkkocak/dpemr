@@ -5,6 +5,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+use anyhow::Result;
 use thiserror::Error;
 
 use tokio::{
@@ -24,7 +25,7 @@ use tokio::process::Command;
 #[derive(Debug)]
 pub struct ExperimentProcess {
     pub job: Job,
-    pub task: JoinHandle<Result<(), anyhow::Error>>,
+    pub task: JoinHandle<Result<()>>,
 }
 
 impl ExperimentProcess {
@@ -32,7 +33,7 @@ impl ExperimentProcess {
         job: Job,
         experiment_db: ExperimentDatabase,
         writer_tx: Sender<ProcessResult>,
-    ) -> Result<ExperimentProcess, anyhow::Error> {
+    ) -> Result<ExperimentProcess> {
         let task = task::spawn(ExperimentProcess::middle_layer(
             job.clone(),
             experiment_db,
@@ -45,11 +46,11 @@ impl ExperimentProcess {
         job: Job,
         experiment_db: ExperimentDatabase,
         writer_tx: Sender<ProcessResult>,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<()> {
         let worker_result = ExperimentProcess::worker(job.clone(), experiment_db).await;
         let end_result = match worker_result {
-            std::result::Result::Ok(res) => res,
-            std::result::Result::Err(e) => ProcessResult {
+            Ok(res) => res,
+            Err(e) => ProcessResult {
                 job,
                 code: -1,
                 stdout: String::new(),
@@ -60,10 +61,7 @@ impl ExperimentProcess {
         Ok(())
     }
 
-    async fn worker(
-        job: Job,
-        experiment_db: ExperimentDatabase,
-    ) -> Result<ProcessResult, anyhow::Error> {
+    async fn worker(job: Job, experiment_db: ExperimentDatabase) -> Result<ProcessResult> {
         // shlex might be necessary
         let mut s = job.command.split_ascii_whitespace();
         let cmd = s
@@ -89,7 +87,7 @@ impl ExperimentProcess {
         })
     }
 
-    async fn process_std(mut child: Child) -> Result<(String, String), anyhow::Error> {
+    async fn process_std(mut child: Child) -> Result<(String, String)> {
         let mut stdout = String::new();
         BufReader::new(
             child
@@ -115,7 +113,7 @@ impl ExperimentProcess {
         job_id: usize,
         res: ExitStatus,
         experiment_db: ExperimentDatabase,
-    ) -> Result<i32, anyhow::Error> {
+    ) -> Result<i32> {
         if res.success() {
             experiment_db
                 .change_status_given_ids(vec![job_id], ExperimentStatus::SuccessFinished)

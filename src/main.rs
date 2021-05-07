@@ -2,6 +2,7 @@ mod db;
 mod logger;
 mod process;
 
+use anyhow::Result;
 use db::ExperimentStatus;
 use logger::TrackerLogger;
 use process::ExperimentProcess;
@@ -77,7 +78,7 @@ enum Command {
 }
 
 #[tokio::main]
-pub async fn main() -> Result<(), anyhow::Error> {
+pub async fn main() -> Result<()> {
     let opt = Opt::from_args();
     let db_config = db::DatabaseConfig::from_config_file(&opt.config).await?;
     let experiment_db = db::ExperimentDatabase::from_db_config(db_config, opt.table_name);
