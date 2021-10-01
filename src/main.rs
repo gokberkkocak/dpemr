@@ -81,7 +81,7 @@ enum Command {
 pub async fn main() -> Result<()> {
     let opt = Opt::from_args();
     let db_config = db::DatabaseConfig::from_config_file(&opt.config).await?;
-    let experiment_db = db::ExperimentDatabase::from_db_config(db_config, opt.table_name);
+    let experiment_db = db::ExperimentDatabase::from_db_config(db_config, opt.table_name)?;
 
     match opt.command {
         Command::Edit {
