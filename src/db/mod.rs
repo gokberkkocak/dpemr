@@ -45,7 +45,7 @@ pub(crate) struct ExperimentDatabase {
 }
 
 impl ExperimentDatabase {
-    pub fn from_db_config(db_config: DatabaseConfig, table_name: String) -> Self {
+    pub fn from_db_config(db_config: DatabaseConfig, table_name: String) -> Result<Self> {
         let url = format!(
             "mysql://{}:{}@{}/{}_dpemr_experiments",
             db_config.get_user(),
@@ -53,11 +53,11 @@ impl ExperimentDatabase {
             db_config.get_host(),
             db_config.get_user()
         );
-        let pool = Pool::new(url);
-        Self {
+        let pool = Pool::from_url(url)?;
+        Ok(Self {
             pool,
             table_name: Arc::new(table_name),
-        }
+        })
     }
 }
 
