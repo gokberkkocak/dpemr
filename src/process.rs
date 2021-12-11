@@ -52,7 +52,7 @@ impl ExperimentProcess {
             Ok(res) => res,
             Err(e) => ProcessResult {
                 job,
-                code: -1,
+                _code: -1,
                 stdout: String::new(),
                 stderr: e.to_string(),
             },
@@ -66,7 +66,7 @@ impl ExperimentProcess {
         let mut s = job.command.split_ascii_whitespace();
         let cmd = s
             .next()
-            .ok_or(anyhow::Error::new(ProcessError::StartProcess))?;
+            .ok_or_else(|| anyhow::Error::new(ProcessError::StartProcess))?;
         let mut child = Command::new(cmd)
             .args(s)
             .stdout(Stdio::piped())
@@ -81,7 +81,7 @@ impl ExperimentProcess {
         print!("{}", stderr);
         Ok(ProcessResult {
             job,
-            code: return_code,
+            _code: return_code,
             stdout,
             stderr,
         })
@@ -93,7 +93,7 @@ impl ExperimentProcess {
             child
                 .stdout
                 .take()
-                .ok_or( anyhow::Error::new(ProcessError::FetchOutput))?,
+                .ok_or_else(|| anyhow::Error::new(ProcessError::FetchOutput))?,
         )
         .read_to_string(&mut stdout)
         .await?;
@@ -102,7 +102,7 @@ impl ExperimentProcess {
             child
                 .stderr
                 .take()
-                .ok_or(anyhow::Error::new(ProcessError::FetchOutput))?,
+                .ok_or_else(|| anyhow::Error::new(ProcessError::FetchOutput))?,
         )
         .read_to_string(&mut stderr)
         .await?;
@@ -145,7 +145,7 @@ enum ProcessError {
 #[derive(Debug)]
 pub struct ProcessResult {
     pub job: Job,
-    code: i32,
+    _code: i32,
     pub stdout: String,
     pub stderr: String,
 }
