@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 structopt = "0.3"
 tokio = { version = "1.5", features = ["process", "macros", "rt-multi-thread"] }
-mysql_async = "0.28"
+mysql_async = "0.29"
 anyhow = "1.0"
 thiserror = "1.0"
 rand = "0.8"
